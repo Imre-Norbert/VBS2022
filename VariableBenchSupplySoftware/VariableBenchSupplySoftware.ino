@@ -22,7 +22,7 @@
 #define ub_VOLTAGE_MEASUREMENT (uint8_t) 2
 
 /* Maximum Voltage to be measured is 30V, using 8-bit resolution = 30/255 */
-#define f_VOLT_PER_BIT (float) 0.117647
+#define f_VOLT_PER_BIT (float) 0.0293
 /************************************************************************************************************************************************************************************************************/
 
 /************************************************************************************************************************************************************************************************************
@@ -66,7 +66,7 @@ void setup()
   ADMUX |= ( 1 << MUX0 );
 
   /* Left adjust the ADCH and ADCL registers to select 8-bit resolution */
-  ADMUX |= ( 1 << ADLAR );
+  //ADMUX |= ( 1 << ADLAR );
 
   /* The previous 3 lines of code could be set like this:
   ADMUX = 0b10100001
@@ -99,16 +99,21 @@ float f_MeasureVoltage( void )
 {
   /* Start ADC conversion */
   ADCSRA |= ( 1 << ADSC );
-
+  
   /* Store the analog data to a variable 
      In single conversion mode the conversion needs to be started but, when it has collected 
      the data it will turn itself off automatically, the data will remain static untill read out or
      overwritten */
-  uint8_t ub_AnalogReadVoltage = ADCH;
+  /* Variable for holding the 2 LSB-s from the 10-bit number(ADC) */
+  uint8_t ub_LowADC = ADCL;
+  /* Variable for holding the 8 MSB-s from the 10-bit number(ADC) */
+  uint16_t uw_HighADC = ( ADCH << 8 ) | ( ub_LowADC );
   
-  float f_ReadVoltage = (float)( ub_AnalogReadVoltage );
+  float f_ReadVoltage = (float)( uw_HighADC );
   return f_ReadVoltage * f_VOLT_PER_BIT;
 }
+
+
 
 void v_DisplayVoltage( float f_Voltage )
 {
