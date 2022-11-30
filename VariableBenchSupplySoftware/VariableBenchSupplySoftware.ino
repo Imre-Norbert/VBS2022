@@ -18,12 +18,11 @@
    This pin is connected to the DIO input pin of the HW-069*/ 
 #define ub_CLK_DIO (uint8_t) 4
 
-/* This is used to read the supply voltage, ADC1 10bit [pin7 on the ic]*/
+/* This is used to read the supply voltage, ADC1 [pin7 on the ic]*/
 #define ub_VOLTAGE_MEASUREMENT (uint8_t) 2
 
-/* Maximum Voltage to be measured is 30V, so 1 bit = 0.0293V */
-//#define f_VOLT_PER_BIT (float) 0.0293
-#define f_VOLT_PER_BIT (float) 0.0488
+/* Maximum Voltage to be measured is 30V, using 8-bit resolution = 30/255 */
+#define f_VOLT_PER_BIT (float) 0.117647
 /************************************************************************************************************************************************************************************************************/
 
 /************************************************************************************************************************************************************************************************************
@@ -40,7 +39,7 @@ TM1637 tm1637( ub_CLK_PIN, ub_CLK_DIO );
 ************************************************************************************************************************************************************************************************************/
 
 /* This function will measure the voltage using an analog input pin, Its input is the pin number, and it will output the measured voltage in [V]*/
-float f_MeasureVoltage( uint8_t ub_AdcPin );
+float f_MeasureVoltage( void );
 
 /* This function is responsable for displaying the voltage to the HW-069 module, its input is a float */
 void v_DisplayVoltage( float f_Voltage );
@@ -55,26 +54,59 @@ void setup()
   /* Set the 7 segment LED-s brightness */
   tm1637.set( BRIGHT_TYPICAL );
 
-  /* Set the ADC1 pin to INPUT */
-  pinMode( ub_VOLTAGE_MEASUREMENT, INPUT );
+  /**************************************************/
+  /*************** Setting up the ADC ***************/
+  /**************************************************/
+  
+  /* Use internal reference voltage of 1.1V 
+     Anything above this will be read as MAXIMUM */
+  ADMUX |= ( 1 << REFS1 );
+
+  /* Configure ADC1 as input channel */
+  ADMUX |= ( 1 << MUX0 );
+
+  /* Left adjust the ADCH and ADCL registers to select 8-bit resolution */
+  ADMUX |= ( 1 << ADLAR );
+
+  /* The previous 3 lines of code could be set like this:
+  ADMUX = 0b10100001
+  */
+
+  /* Enable the ADC */
+  ADCSRA |= ( 1 << ADEN );
+
+  /* Set ADC division factor to 8 (the chip is set to tun at 1Mhz, so the ADC frequency will be 125kHz)*/
+  ADCSRA |= ( 1 << ADPS0 );
+  ADCSRA |= ( 1 << ADPS1 );
+  
+  /**************************************************/
 }
 
 
 void loop() 
 {
-  //tm1637.display( 1, (int) (f_MeasureVoltage( ub_VOLTAGE_MEASUREMENT )) );
-  //tm1637.display( 1, 2 );
-  v_DisplayVoltage( f_MeasureVoltage( ub_VOLTAGE_MEASUREMENT ) );
-  delay( 300 );
+  
+  v_DisplayVoltage( f_MeasureVoltage() );
+  delay( 500 );
+  
 }
 
 /************************************************************************************************************************************************************************************************************
 **************************************************************************** F U N C T I O N S **************************************************************************************************************
 ************************************************************************************************************************************************************************************************************/
 
-float f_MeasureVoltage( uint8_t ub_AdcPin )
+float f_MeasureVoltage( void )
 {
-  float f_ReadVoltage = (float)( analogRead( ub_AdcPin ) );
+  /* Start ADC conversion */
+  ADCSRA |= ( 1 << ADSC );
+
+  /* Store the analog data to a variable 
+     In single conversion mode the conversion needs to be started but, when it has collected 
+     the data it will turn itself off automatically, the data will remain static untill read out or
+     overwritten */
+  uint8_t ub_AnalogReadVoltage = ADCH;
+  
+  float f_ReadVoltage = (float)( ub_AnalogReadVoltage );
   return f_ReadVoltage * f_VOLT_PER_BIT;
 }
 
@@ -83,7 +115,9 @@ void v_DisplayVoltage( float f_Voltage )
   uint8_t aub_TimeDisp[4];
   
   uint8_t ub_WholePart = (uint8_t)( f_Voltage );
+  
   f_Voltage -= ub_WholePart;
+  
   uint8_t ub_Remainder = (uint8_t)( f_Voltage * 100 );
 
   if( ub_WholePart >= 10 )
